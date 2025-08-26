@@ -1,0 +1,451 @@
+"""
+Marketing Content Generator - Single File (Python / Tkinter)
+
+Drop this into Visual Studio (or any editor) as `marketing_content_generator.py` and run with Python 3.8+.
+No external packages required.
+
+Features:
+ - GUI (Tkinter) with inputs: product, audience, benefit, pain, features, keywords, tone
+ - Generates multiple variants (1-12) using AIDA/PAS/FAB/4C templates + spintax
+ - Copy individual outputs to clipboard
+ - Export all variants to TXT or CSV
+ - Reroll (new random seed)
+
+Author: ChatGPT (GPT-5 Thinking mini)
+"""
+
+import csv
+import random
+import tkinter as tk
+from tkinter import ttk, scrolledtext, filedialog, messagebox
+from datetime import datetime
+
+# ---------------------- Utilities ----------------------
+
+def title_case(s: str) -> str:
+    return " ".join(w.capitalize() for w in s.split())
+
+
+def sentence_case(s: str) -> str:
+    s = " ".join(s.split())
+    if not s:
+        return s
+    return s[0].upper() + s[1:]
+
+
+def spintax(text: str) -> str:
+    # simple {a|b|c} spinner
+    out = text
+    while True:
+        start = out.find("{")
+        if start == -1:
+            break
+        end = out.find("}", start)
+        if end == -1:
+            break
+        group = out[start + 1:end]
+        options = group.split("|")
+        choice = random.choice(options).strip()
+        out = out[:start] + choice + out[end + 1:]
+    return out
+
+
+def hashtags_from(keywords: str):
+    parts = [k.strip() for k in keywords.replace("\n", ",").split(",") if k.strip()]
+    clean = []
+    for p in parts:
+        h = p.replace(" ", "")
+        if h and h not in clean:
+            clean.append(h)
+    extras = ["Growth", "Marketing", "Trending", "Tips", "HowTo", "Pro", "Daily", "MadeEasy"]
+    result = [f"#{c}" for c in clean[:6]]
+    if len(result) < 8:
+        result.extend([f"#{e}" for e in extras[: (8 - len(result))]])
+    return result[:8]
+
+
+# ---------------------- Template Frameworks ----------------------
+
+def frameworks_aida(params):
+    product = params['product']
+    audience = params['audience']
+    benefit = params['benefit']
+    pain = params['pain']
+    return [
+        f"{product}: {random.choice([ 'Discover', 'Experience', 'Meet', 'Say hello to' ])} {benefit}.",
+        f"{random.choice([ 'Tired of', 'Done with', 'Struggling with' ])} {pain}?",
+        f"{random.choice([ 'See how', "Here's how", 'Now you can' ])} {audience} {random.choice(['achieve', 'unlock', 'nail'])} {benefit.lower()}.",
+        f"{random.choice([ 'Try it today', 'Get started', 'Join us', 'Claim your edge' ])} — {random.choice(['limited time', 'no hassle', 'risk‑free'])}.",
+    ]
+
+
+def frameworks_pas(params):
+    audience = params['audience']
+    pain = params['pain']
+    product = params['product']
+    return [
+        f"{random.choice(['Problem:', 'Real talk:', 'Heads up:'])} {pain}.",
+        f"{random.choice(['Agitate:', 'It gets worse:', 'And then:'])} {audience} lose time and money.",
+        f"{random.choice(['Solution:', 'Fix it:', 'Good news:'])} {product} makes it effortless.",
+    ]
+
+
+def frameworks_fab(params):
+    product = params['product']
+    features = params['features']
+    benefit = params['benefit']
+    return [
+        f"{product} — {features}.",
+        f"So what? {benefit}.",
+        f"{random.choice(['Result:', 'Outcome:'])} {random.choice(['More growth', 'Higher ROI', 'Happier users'])}.",
+    ]
+
+
+def frameworks_4c(params):
+    product = params['product']
+    benefit = params['benefit']
+    return [
+        f"{product} in one line: {benefit}.",
+        "Clear. Concise. Compelling. Credible.",
+    ]
+
+
+# ---------------------- Generator ----------------------
+
+def make_templates(params):
+    # ensure defaults
+    product = params.get('product') or 'Your Product'
+    audience = params.get('audience') or 'busy professionals'
+    benefit = params.get('benefit') or 'faster results with less effort'
+    pain = params.get('pain') or 'manual, repetitive tasks'
+    features = params.get('features') or 'AI-powered insights, 1-click actions, real-time analytics'
+    keywords = params.get('keywords') or ''
+
+    base = {
+        'product': product,
+        'audience': audience,
+        'benefit': benefit,
+        'pain': pain,
+        'features': features,
+    }
+
+    blocks = []
+    blocks.extend(frameworks_aida(base))
+    blocks.extend(frameworks_pas(base))
+    blocks.extend(frameworks_fab(base))
+    blocks.extend(frameworks_4c(base))
+
+    headline = spintax(f"{{Boost|Supercharge|Level up|Transform}} {audience} with {product}: {{{title_case(benefit)}|{title_case(benefit)} Today}}")
+    tagline = spintax(f"{{Do more in less time|Work smarter|Results made simple}} with {product}.")
+    tweet = spintax(f"{product} → {benefit}. {{Stop|Skip}} {pain}. {{Ready?|Let's go!|Onwards!}}")
+    insta = spintax(f"Swipe → to see how {product} helps {audience} get {benefit}. {{Save this|Share with a friend}}!")
+    linkedin = spintax(f"{title_case(product)} helps {audience} tackle {pain}. If {random.choice(['efficiency','clarity','speed','scale'])} matters to you, this is worth a look. {random.choice(['DM for a demo','Open to beta testers','Happy to share a case study'])}.")
+    email_subject = spintax(f"{{Quick win|New way}} to {benefit} — {product}")
+    email_body = (
+        f"Hi {title_case(audience.split()[0])},\n\n"
+        f"If {pain} is draining your week, {product} can help. With {features}, teams see {random.choice(['2×','3×','up to 60%','measurable'])} improvements in throughput.\n\n"
+        "Want a quick look? Reply 'YES' and I’ll send a 2‑minute walkthrough.\n\nBest,\nYour Name"
+    )
+
+    blog_outline = [
+        "Intro: the cost of doing it the hard way",
+        f"Section 1: What is {product}?",
+        f"Section 2: Why {audience} struggle with {pain}",
+        f"Section 3: How to get {benefit}",
+        "Section 4: Case study + quick wins",
+        "Conclusion: checklist + CTA",
+    ]
+
+    hashtags = hashtags_from(keywords)
+
+    return {
+        'headline': sentence_case(headline),
+        'tagline': sentence_case(tagline),
+        'tweet': sentence_case(tweet) + '\n\n' + ' '.join(hashtags),
+        'instagram': sentence_case(insta) + '\n\n' + ' '.join(hashtags),
+        'linkedin': sentence_case(linkedin),
+        'email': {
+            'subject': email_subject,
+            'body': email_body,
+        },
+        'blog_outline': blog_outline,
+        'blocks': [sentence_case(b) for b in blocks],
+    }
+
+
+# ---------------------- GUI ----------------------
+
+class MarketingApp(tk.Tk):
+    def __init__(self):
+        super().__init__()
+        self.title('Marketing Content Generator')
+        self.geometry('980x680')
+        self.minsize(900, 600)
+
+        # state
+        self.seed = None
+        self.variants = []
+
+        # inputs frame
+        inp = ttk.Frame(self)
+        inp.pack(side='left', fill='y', padx=12, pady=12)
+
+        self._build_inputs(inp)
+
+        # outputs frame
+        out = ttk.Frame(self)
+        out.pack(side='right', fill='both', expand=True, padx=12, pady=12)
+
+        self._build_outputs(out)
+
+    def _build_inputs(self, parent):
+        ttk.Label(parent, text='Inputs', font=('Segoe UI', 14, 'bold')).pack(anchor='w', pady=(0, 8))
+
+        pad = {'padx': 0, 'pady': 6}
+        # product
+        ttk.Label(parent, text='Product / Brand:').pack(anchor='w', **pad)
+        self.product_var = tk.StringVar(value='NovaFlow – AI Workflow Assistant')
+        ttk.Entry(parent, textvariable=self.product_var, width=28).pack(**pad)
+
+        ttk.Label(parent, text='Audience:').pack(anchor='w', **pad)
+        self.audience_var = tk.StringVar(value='busy product marketers')
+        ttk.Entry(parent, textvariable=self.audience_var, width=28).pack(**pad)
+
+        ttk.Label(parent, text='Core Benefit:').pack(anchor='w', **pad)
+        self.benefit_var = tk.StringVar(value='faster results with less effort')
+        ttk.Entry(parent, textvariable=self.benefit_var, width=28).pack(**pad)
+
+        ttk.Label(parent, text='Pain Point:').pack(anchor='w', **pad)
+        self.pain_var = tk.StringVar(value='manual, repetitive tasks')
+        ttk.Entry(parent, textvariable=self.pain_var, width=28).pack(**pad)
+
+        ttk.Label(parent, text='Key Features (comma-separated):').pack(anchor='w', **pad)
+        self.features_var = tk.StringVar(value='AI-powered insights, 1-click actions, real-time analytics')
+        ttk.Entry(parent, textvariable=self.features_var, width=28).pack(**pad)
+
+        ttk.Label(parent, text='Keywords (for hashtags):').pack(anchor='w', **pad)
+        self.keywords_var = tk.StringVar(value='automation, workflow, productivity, marketing')
+        ttk.Entry(parent, textvariable=self.keywords_var, width=28).pack(**pad)
+
+        ttk.Label(parent, text='Tone:').pack(anchor='w', **pad)
+        self.tone_var = tk.StringVar(value='Friendly')
+        tone_combo = ttk.Combobox(parent, textvariable=self.tone_var, values=['Friendly', 'Professional', 'Bold', 'Playful', 'Inspiring'], state='readonly', width=25)
+        tone_combo.pack(**pad)
+
+        ttk.Label(parent, text='Variations:').pack(anchor='w', **pad)
+        self.count_var = tk.IntVar(value=4)
+        spin = ttk.Spinbox(parent, from_=1, to=12, textvariable=self.count_var, width=6)
+        spin.pack(**pad)
+
+        btn_frame = ttk.Frame(parent)
+        btn_frame.pack(fill='x', pady=(10,0))
+
+        ttk.Button(btn_frame, text='Generate', command=self.generate).pack(side='left', padx=(0,6))
+        ttk.Button(btn_frame, text='Reroll', command=self.reroll).pack(side='left', padx=(0,6))
+        ttk.Button(btn_frame, text='Export TXT', command=self.export_txt).pack(side='left', padx=(0,6))
+        ttk.Button(btn_frame, text='Export CSV', command=self.export_csv).pack(side='left')
+
+    def _build_outputs(self, parent):
+        top = ttk.Frame(parent)
+        top.pack(fill='x')
+        ttk.Label(top, text='Generated Variants', font=('Segoe UI', 14, 'bold')).pack(anchor='w')
+
+        self.canvas = tk.Canvas(parent, borderwidth=0, background='#f7f7f7')
+        self.scroll_frame = ttk.Frame(self.canvas)
+        self.vsb = ttk.Scrollbar(parent, orient='vertical', command=self.canvas.yview)
+        self.canvas.configure(yscrollcommand=self.vsb.set)
+
+        self.vsb.pack(side='right', fill='y')
+        self.canvas.pack(side='left', fill='both', expand=True)
+        self.canvas.create_window((0,0), window=self.scroll_frame, anchor='nw')
+        self.scroll_frame.bind('<Configure>', lambda e: self.canvas.configure(scrollregion=self.canvas.bbox('all')))
+
+        # initial placeholder
+        self._clear_variants_display()
+
+    def _clear_variants_display(self):
+        for w in self.scroll_frame.winfo_children():
+            w.destroy()
+        ttk.Label(self.scroll_frame, text='No output yet. Click "Generate" to create content.', foreground='#444').pack(padx=10, pady=10)
+
+    def generate(self):
+        # seed from time + random to vary
+        self.seed = random.randrange(0, 2**32)
+        random.seed(self.seed)
+        count = max(1, min(12, int(self.count_var.get())))
+        params = {
+            'product': self.product_var.get().strip(),
+            'audience': self.audience_var.get().strip(),
+            'benefit': self.benefit_var.get().strip(),
+            'pain': self.pain_var.get().strip(),
+            'features': self.features_var.get().strip(),
+            'keywords': self.keywords_var.get().strip(),
+            'tone': self.tone_var.get().strip(),
+        }
+        self.variants = [make_templates(params) for _ in range(count)]
+        self._render_variants()
+
+    def reroll(self):
+        # keep inputs same, new random seed
+        self.seed = random.randrange(0, 2**32)
+        random.seed(self.seed)
+        if not hasattr(self, 'variants') or not self.variants:
+            self.generate()
+            return
+        params = {
+            'product': self.product_var.get().strip(),
+            'audience': self.audience_var.get().strip(),
+            'benefit': self.benefit_var.get().strip(),
+            'pain': self.pain_var.get().strip(),
+            'features': self.features_var.get().strip(),
+            'keywords': self.keywords_var.get().strip(),
+            'tone': self.tone_var.get().strip(),
+        }
+        count = len(self.variants)
+        self.variants = [make_templates(params) for _ in range(count)]
+        self._render_variants()
+
+    def _render_variants(self):
+        for w in self.scroll_frame.winfo_children():
+            w.destroy()
+
+        for idx, v in enumerate(self.variants, start=1):
+            frame = ttk.Frame(self.scroll_frame, relief='ridge', padding=8)
+            frame.pack(fill='x', padx=8, pady=6)
+            header = ttk.Frame(frame)
+            header.pack(fill='x')
+            ttk.Label(header, text=f'Variant {idx}', font=('Segoe UI', 11, 'bold')).pack(side='left')
+            ttk.Button(header, text='Copy All', command=lambda vv=v: self._copy_all(vv)).pack(side='right')
+
+            # Grid with outputs
+            grid = ttk.Frame(frame)
+            grid.pack(fill='both', expand=True, pady=6)
+
+            # headline & tagline
+            ttk.Label(grid, text='Headline:', font=('Segoe UI', 9, 'bold')).grid(row=0, column=0, sticky='nw')
+            ttk.Label(grid, text=v['headline'], wraplength=520).grid(row=0, column=1, sticky='nw')
+            ttk.Button(grid, text='Copy', command=lambda t=v['headline']: self._copy_text(t)).grid(row=0, column=2, padx=6)
+
+            ttk.Label(grid, text='Tagline:', font=('Segoe UI', 9, 'bold')).grid(row=1, column=0, sticky='nw')
+            ttk.Label(grid, text=v['tagline'], wraplength=520).grid(row=1, column=1, sticky='nw')
+            ttk.Button(grid, text='Copy', command=lambda t=v['tagline']: self._copy_text(t)).grid(row=1, column=2, padx=6)
+
+            ttk.Label(grid, text='X / Tweet:', font=('Segoe UI', 9, 'bold')).grid(row=2, column=0, sticky='nw')
+            ttk.Label(grid, text=v['tweet'], wraplength=520).grid(row=2, column=1, sticky='nw')
+            ttk.Button(grid, text='Copy', command=lambda t=v['tweet']: self._copy_text(t)).grid(row=2, column=2, padx=6)
+
+            ttk.Label(grid, text='Instagram:', font=('Segoe UI', 9, 'bold')).grid(row=3, column=0, sticky='nw')
+            ttk.Label(grid, text=v['instagram'], wraplength=520).grid(row=3, column=1, sticky='nw')
+            ttk.Button(grid, text='Copy', command=lambda t=v['instagram']: self._copy_text(t)).grid(row=3, column=2, padx=6)
+
+            ttk.Label(grid, text='LinkedIn:', font=('Segoe UI', 9, 'bold')).grid(row=4, column=0, sticky='nw')
+            ttk.Label(grid, text=v['linkedin'], wraplength=520).grid(row=4, column=1, sticky='nw')
+            ttk.Button(grid, text='Copy', command=lambda t=v['linkedin']: self._copy_text(t)).grid(row=4, column=2, padx=6)
+
+            # email
+            ttk.Label(grid, text='Email Subject:', font=('Segoe UI', 9, 'bold')).grid(row=5, column=0, sticky='nw')
+            ttk.Label(grid, text=v['email']['subject'], wraplength=520).grid(row=5, column=1, sticky='nw')
+            ttk.Button(grid, text='Copy', command=lambda t=v['email']['subject']: self._copy_text(t)).grid(row=5, column=2, padx=6)
+
+            ttk.Label(grid, text='Email Body:', font=('Segoe UI', 9, 'bold')).grid(row=6, column=0, sticky='nw')
+            body_widget = scrolledtext.ScrolledText(grid, height=5, width=60, wrap='word')
+            body_widget.grid(row=6, column=1, columnspan=1, sticky='nw')
+            body_widget.insert('1.0', v['email']['body'])
+            body_widget.configure(state='disabled')
+            ttk.Button(grid, text='Copy', command=lambda t=v['email']['body']: self._copy_text(t)).grid(row=6, column=2, padx=6)
+
+            # blog outline
+            ttk.Label(grid, text='Blog Outline:', font=('Segoe UI', 9, 'bold')).grid(row=7, column=0, sticky='nw')
+            outline = '\n'.join(f"{i+1}. {b}" for i, b in enumerate(v['blog_outline']))
+            ttk.Label(grid, text=outline, wraplength=520, justify='left').grid(row=7, column=1, sticky='nw')
+
+            # blocks
+            ttk.Label(grid, text='Blocks:', font=('Segoe UI', 9, 'bold')).grid(row=8, column=0, sticky='nw')
+            blocks_text = '\n'.join(f"• {b}" for b in v['blocks'])
+            ttk.Label(grid, text=blocks_text, wraplength=520, justify='left').grid(row=8, column=1, sticky='nw')
+
+    def _copy_text(self, text):
+        try:
+            self.clipboard_clear()
+            self.clipboard_append(text)
+            self.update()  # now it stays on clipboard after the window is closed
+            messagebox.showinfo('Copied', 'Text copied to clipboard')
+        except Exception as e:
+            messagebox.showerror('Error', f'Failed to copy: {e}')
+
+    def _copy_all(self, variant):
+        parts = [
+            f"Headline: {variant['headline']}",
+            f"Tagline: {variant['tagline']}",
+            f"Tweet: {variant['tweet']}",
+            f"Instagram: {variant['instagram']}",
+            f"LinkedIn: {variant['linkedin']}",
+            f"Email Subject: {variant['email']['subject']}",
+            f"Email Body:\n{variant['email']['body']}",
+            "Blog Outline:\n" + '\n'.join(variant['blog_outline']),
+            "Blocks:\n" + '\n'.join(variant['blocks']),
+        ]
+        all_text = '\n\n'.join(parts)
+        self._copy_text(all_text)
+
+    def export_txt(self):
+        if not self.variants:
+            messagebox.showwarning('No data', 'Generate content before exporting')
+            return
+        path = filedialog.asksaveasfilename(defaultextension='.txt', filetypes=[('Text files', '*.txt')], initialfile=f'marketing_content_{datetime.now().strftime("%Y%m%d_%H%M%S")}.txt')
+        if not path:
+            return
+        try:
+            with open(path, 'w', encoding='utf-8') as f:
+                for i, v in enumerate(self.variants, start=1):
+                    f.write(f"# Variant {i}\n")
+                    f.write(f"Headline: {v['headline']}\n")
+                    f.write(f"Tagline: {v['tagline']}\n")
+                    f.write(f"Tweet: {v['tweet']}\n")
+                    f.write(f"Instagram: {v['instagram']}\n")
+                    f.write(f"LinkedIn: {v['linkedin']}\n")
+                    f.write(f"Email Subject: {v['email']['subject']}\n")
+                    f.write(f"Email Body:\n{v['email']['body']}\n")
+                    f.write("Blog Outline:\n")
+                    for idx, b in enumerate(v['blog_outline'], start=1):
+                        f.write(f"  {idx}. {b}\n")
+                    f.write("Blocks:\n")
+                    for b in v['blocks']:
+                        f.write(f"  • {b}\n")
+                    f.write('\n\n')
+            messagebox.showinfo('Saved', f'Exported to {path}')
+        except Exception as e:
+            messagebox.showerror('Error', f'Failed to save: {e}')
+
+    def export_csv(self):
+        if not self.variants:
+            messagebox.showwarning('No data', 'Generate content before exporting')
+            return
+        path = filedialog.asksaveasfilename(defaultextension='.csv', filetypes=[('CSV files', '*.csv')], initialfile=f'marketing_content_{datetime.now().strftime("%Y%m%d_%H%M%S")}.csv')
+        if not path:
+            return
+        try:
+            with open(path, 'w', newline='', encoding='utf-8') as csvfile:
+                writer = csv.writer(csvfile)
+                writer.writerow(['variant', 'headline', 'tagline', 'tweet', 'instagram', 'linkedin', 'email_subject', 'email_body', 'blog_outline', 'blocks'])
+                for i, v in enumerate(self.variants, start=1):
+                    writer.writerow([
+                        i,
+                        v['headline'],
+                        v['tagline'],
+                        v['tweet'],
+                        v['instagram'],
+                        v['linkedin'],
+                        v['email']['subject'],
+                        v['email']['body'],
+                        ' | '.join(v['blog_outline']),
+                        ' | '.join(v['blocks']),
+                    ])
+            messagebox.showinfo('Saved', f'Exported to {path}')
+        except Exception as e:
+            messagebox.showerror('Error', f'Failed to save CSV: {e}')
+
+
+if __name__ == '__main__':
+    app = MarketingApp()
+    app.mainloop()
